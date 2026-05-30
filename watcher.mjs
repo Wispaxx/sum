@@ -1,13 +1,28 @@
 import fs from "node:fs/promises";
-import crypto from "node:crypto";
 
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const ANNOUNCE_STARTUP = process.env.ANNOUNCE_STARTUP === "true";
 const STATE_FILE = process.env.STATE_FILE || "state.json";
 
-const TARGETS = [
-  { id: "windows-player", label: "Roblox Player Windows", binary: "WindowsPlayer" },
-  { id: "windows-player-zcanary", label: "Roblox Player Windows zcanary", binary: "WindowsPlayer", channel: "zcanary" }
+const LIVE_TARGET = {
+  id: "windows-player",
+  label: "Roblox Player Windows",
+  binary: "WindowsPlayer"
+};
+
+const FUTURE_TARGETS = [
+  {
+    id: "windows-player-zcanary",
+    label: "Roblox Player Windows zcanary",
+    binary: "WindowsPlayer",
+    channel: "zcanary"
+  },
+  {
+    id: "windows-player-zintegration",
+    label: "Roblox Player Windows zintegration",
+    binary: "WindowsPlayer",
+    channel: "zintegration"
+  }
 ];
 
 if (!WEBHOOK_URL) {
@@ -17,11 +32,6 @@ if (!WEBHOOK_URL) {
 function versionUrl(target) {
   const base = `https://clientsettingscdn.roblox.com/v2/client-version/${target.binary}`;
   return target.channel ? `${base}/channel/${encodeURIComponent(target.channel)}` : base;
-}
-
-function manifestUrl(guid, channel) {
-  const prefix = channel ? `/channel/${encodeURIComponent(channel)}` : "";
-  return `https://setup.rbxcdn.com${prefix}/${guid}-rbxPkgManifest.txt`;
 }
 
 async function fetchText(url) {
@@ -52,32 +62,6 @@ async function saveState(state) {
   await fs.writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
 }
 
-async function getManifestInfo(guid, channel) {
-  const url = manifestUrl(guid, channel);
-  const text = await fetchText(url);
-  const lines = text.split(/\r?\n/).filter(Boolean);
-
-  const packages = [];
-  const start = lines[0]?.startsWith("v") ? 1 : 0;
-
-  for (let i = start; i + 3 < lines.length; i += 4) {
-    packages.push({
-      file: lines[i],
-      md5: lines[i + 1],
-      compressedSize: Number(lines[i + 2]),
-      decompressedSize: Number(lines[i + 3])
-    });
-  }
-
-  return {
-    url,
-    sha256: crypto.createHash("sha256").update(text).digest("hex"),
-    packageCount: packages.length,
-    totalCompressedSize: packages.reduce((sum, pkg) => sum + (pkg.compressedSize || 0), 0),
-    firstPackageMd5: packages[0]?.md5 || "unknown"
-  };
-}
-
 async function sendDiscord(payload) {
   const response = await fetch(WEBHOOK_URL, {
     method: "POST",
@@ -101,69 +85,109 @@ function formatBrusselsDate() {
   }).format(new Date());
 }
 
-function buildEmbed({ version }) {
+function formatHash(guid) {
+  return guid ? `\`${guid}\`` : "Unknown";
+}
+
+function buildLiveUpdateEmbed(guid) {
   return {
     title: "A Roblox update has been detected!",
     description: "This is a live update, Roblox exploits are patched.",
     color: 0xff3b30,
     fields: [
-      { name: "Hash:", value: `\`${version.clientVersionUpload}\`` },
+      { name: "Hash:", value: formatHash(guid) },
       { name: "Date:", value: formatBrusselsDate() }
     ],
     timestamp: new Date().toISOString()
   };
 }
 
-async function checkTarget(target, previous) {
-  const version = await fetchJson(versionUrl(target));
-  const guid = version.clientVersionUpload;
-
-  if (!guid) {
-    throw new Error(`No clientVersionUpload in response for ${target.label}.`);
-  }
-
-  const changed = previous?.guid && previous.guid !== guid;
-  const shouldAnnounceStartup = ANNOUNCE_STARTUP;
-
-  if (!changed && !shouldAnnounceStartup) {
-    return {
-      changed: false,
-      state: previous || { guid, version: version.version }
-    };
-  }
-
-  await sendDiscord({
-    username: "Roblox Update Watcher",
-    embeds: [
-      buildEmbed({
-        version
-      })
-    ]
-  });
-
+function buildFutureUpdateEmbed(guid) {
   return {
-    changed: true,
-    state: {
-      guid,
-      version: version.version,
-      updatedAt: new Date().toISOString()
-    }
+    title: "A future Roblox update has been detected!",
+    description: "This is a future update, no need to worry about Roblox exploits being patched yet.",
+    color: 0xffcc00,
+    fields: [
+      { name: "Hash:", value: formatHash(guid) },
+      { name: "Date:", value: formatBrusselsDate() }
+    ],
+    timestamp: new Date().toISOString()
   };
+}
+
+async function findFutureVersion(liveGuid) {
+  for (const target of FUTURE_TARGETS) {
+    try {
+      const version = await fetchJson(versionUrl(target));
+      const guid = version.clientVersionUpload || null;
+
+      if (guid && guid !== liveGuid) {
+        return { target, version, guid };
+      }
+    } catch (error) {
+      console.error(`[${target.label}] ${error.message}`);
+    }
+  }
+
+  return null;
 }
 
 async function main() {
   const state = await loadState();
   let stateChanged = false;
 
-  for (const target of TARGETS) {
-    try {
-      const previousState = JSON.stringify(state[target.id] || null);
-      const result = await checkTarget(target, state[target.id]);
-      state[target.id] = result.state;
-      stateChanged ||= result.changed || JSON.stringify(result.state) !== previousState;
-    } catch (error) {
-      console.error(`[${target.label}] ${error.message}`);
+  const liveVersion = await fetchJson(versionUrl(LIVE_TARGET));
+  const liveGuid = liveVersion.clientVersionUpload;
+
+  if (!liveGuid) {
+    throw new Error("No clientVersionUpload in live Roblox response.");
+  }
+
+  const previousLive = state[LIVE_TARGET.id];
+  const liveChanged = previousLive?.guid && previousLive.guid !== liveGuid;
+
+  if (ANNOUNCE_STARTUP || liveChanged) {
+    await sendDiscord({
+      username: "Roblox Update Watcher",
+      embeds: [buildLiveUpdateEmbed(liveGuid)]
+    });
+  }
+
+  const nextLive = { guid: liveGuid, version: liveVersion.version };
+  stateChanged ||= JSON.stringify(previousLive || null) !== JSON.stringify(nextLive);
+  state[LIVE_TARGET.id] = nextLive;
+
+  const future = await findFutureVersion(liveGuid);
+  const previousFuture = state["future-update"];
+
+  if (future) {
+    const nextFuture = {
+      guid: future.guid,
+      version: future.version.version,
+      channel: future.target.channel
+    };
+
+    if (ANNOUNCE_STARTUP || previousFuture?.guid !== future.guid) {
+      await sendDiscord({
+        username: "Roblox Update Watcher",
+        embeds: [buildFutureUpdateEmbed(future.guid)]
+      });
     }
+
+    stateChanged ||= JSON.stringify(previousFuture || null) !== JSON.stringify(nextFuture);
+    state["future-update"] = nextFuture;
+  } else {
+    const nextFuture = { guid: null, status: "unknown" };
+
+    if (ANNOUNCE_STARTUP) {
+      await sendDiscord({
+        username: "Roblox Update Watcher",
+        embeds: [buildFutureUpdateEmbed(null)]
+      });
+    }
+
+    stateChanged ||= JSON.stringify(previousFuture || null) !== JSON.stringify(nextFuture);
+    state["future-update"] = nextFuture;
   }
 
   if (stateChanged) {
