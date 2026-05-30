@@ -7,9 +7,7 @@ const STATE_FILE = process.env.STATE_FILE || "state.json";
 
 const TARGETS = [
   { id: "windows-player", label: "Roblox Player Windows", binary: "WindowsPlayer" },
-
-  // Optional future/canary channel. It only works if Roblox exposes the channel publicly.
-  // { id: "windows-player-zcanary", label: "Roblox Player Windows zcanary", binary: "WindowsPlayer", channel: "zcanary" }
+  { id: "windows-player-zcanary", label: "Roblox Player Windows zcanary", binary: "WindowsPlayer", channel: "zcanary" }
 ];
 
 if (!WEBHOOK_URL) {
