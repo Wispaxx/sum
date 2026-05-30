@@ -1,0 +1,16 @@
+{
+  "windows-player": {
+    "guid": "version-460909c4fe904aae",
+    "version": "0.723.0.7230785",
+    "manifestSha256": "f7cf83bb4ca4e5cba054437c246ded5e774e7a75405c5540d265cfa8fcc0bb1b",
+    "firstPackageMd5": "7fbf6adadfdd90472bb5d21c06637b46",
+    "updatedAt": "2026-05-30T12:21:11.613Z"
+  },
+  "windows-studio": {
+    "guid": "version-981c8a3157934eec",
+    "version": "0.723.0.7230785",
+    "manifestSha256": "81806cab46244e3c43bb9eb7b4827b7496a54fd94fe1cb4ead8bbd15a72d359e",
+    "firstPackageMd5": "9e6ce8a71b433d3e6802b3438b418c2d",
+    "updatedAt": "2026-05-30T12:21:11.906Z"
+  }
+}
