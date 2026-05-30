@@ -1,0 +1,12 @@
+{
+  "name": "roblox-update-watcher",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node watcher.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
