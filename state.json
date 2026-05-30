@@ -2,9 +2,7 @@
   "windows-player": {
     "guid": "version-460909c4fe904aae",
     "version": "0.723.0.7230785",
-    "manifestSha256": "f7cf83bb4ca4e5cba054437c246ded5e774e7a75405c5540d265cfa8fcc0bb1b",
-    "firstPackageMd5": "7fbf6adadfdd90472bb5d21c06637b46",
-    "updatedAt": "2026-05-30T12:21:11.613Z"
+    "updatedAt": "2026-05-30T12:26:22.188Z"
   },
   "windows-studio": {
     "guid": "version-981c8a3157934eec",
