@@ -7,7 +7,6 @@ const STATE_FILE = process.env.STATE_FILE || "state.json";
 
 const TARGETS = [
   { id: "windows-player", label: "Roblox Player Windows", binary: "WindowsPlayer" },
-  { id: "windows-studio", label: "Roblox Studio Windows", binary: "WindowsStudio64" },
 
   // Optional future/canary channel. It only works if Roblox exposes the channel publicly.
   // { id: "windows-player-zcanary", label: "Roblox Player Windows zcanary", binary: "WindowsPlayer", channel: "zcanary" }
@@ -96,25 +95,23 @@ async function sendDiscord(payload) {
   }
 }
 
-function buildEmbed({ title, color, target, version, manifest, old }) {
-  const fields = [
-    { name: "Cible", value: target.label, inline: true },
-    { name: "Version", value: `\`${version.version}\``, inline: true },
-    { name: "GUID / hash Roblox", value: `\`${version.clientVersionUpload}\`` },
-    { name: "Manifest SHA-256", value: `\`${manifest.sha256}\`` },
-    { name: "Premier package MD5", value: `\`${manifest.firstPackageMd5}\``, inline: true },
-    { name: "Packages", value: String(manifest.packageCount), inline: true }
-  ];
+function formatBrusselsDate() {
+  return new Intl.DateTimeFormat("fr-BE", {
+    timeZone: "Europe/Brussels",
+    dateStyle: "short",
+    timeStyle: "medium"
+  }).format(new Date());
+}
 
-  if (old?.guid && old.guid !== version.clientVersionUpload) {
-    fields.splice(3, 0, { name: "Ancien GUID", value: `\`${old.guid}\`` });
-  }
-
+function buildEmbed({ version }) {
   return {
-    title,
-    color,
-    fields,
-    url: manifest.url,
+    title: "A Roblox update has been detected!",
+    description: "This is a live update, Roblox exploits are patched.",
+    color: 0xff3b30,
+    fields: [
+      { name: "Hash:", value: `\`${version.clientVersionUpload}\`` },
+      { name: "Date:", value: formatBrusselsDate() }
+    ],
     timestamp: new Date().toISOString()
   };
 }
@@ -137,19 +134,11 @@ async function checkTarget(target, previous) {
     };
   }
 
-  const manifest = await getManifestInfo(guid, target.channel);
-  const title = changed ? "Mise a jour Roblox detectee" : "Watcher Roblox demarre";
-
   await sendDiscord({
     username: "Roblox Update Watcher",
     embeds: [
       buildEmbed({
-        title,
-        color: changed ? 0xffb020 : 0x22c55e,
-        target,
-        version,
-        manifest,
-        old: previous
+        version
       })
     ]
   });
@@ -159,8 +148,6 @@ async function checkTarget(target, previous) {
     state: {
       guid,
       version: version.version,
-      manifestSha256: manifest.sha256,
-      firstPackageMd5: manifest.firstPackageMd5,
       updatedAt: new Date().toISOString()
     }
   };
